@@ -33,6 +33,8 @@ export type Reporte = {
   ubicacion: { type: "Point"; coordinates: [number, number] }; // [longitud, latitud]
   direccionTexto?: string;
   fechaIncidente: string;
+  reportadoPor?: string; // id del autor (en la lista normal)
+  usuario?: { _id: string; nombre: string; email: string } | null; // autor unido vía $lookup
   createdAt: string;
   updatedAt: string;
 };
@@ -45,6 +47,7 @@ export type NuevoReporte = {
   longitud: number;
   latitud: number;
   direccionTexto?: string;
+  reportadoPor?: string; // id del usuario autor (opcional)
 };
 
 type RespuestaLista = { total: number; reportes: Reporte[] };
@@ -108,4 +111,25 @@ export async function actualizarEstado(
 export async function eliminarReporte(id: string): Promise<void> {
   const res = await fetch(`${BASE}/reportes/${id}`, { method: "DELETE" });
   await manejarRespuesta<{ mensaje: string }>(res);
+}
+
+export type Usuario = {
+  _id: string;
+  nombre: string;
+  email: string;
+  rol: string;
+};
+
+export async function listarUsuarios(): Promise<{
+  total: number;
+  usuarios: Usuario[];
+}> {
+  const res = await fetch(`${BASE}/usuarios`);
+  return manejarRespuesta(res);
+}
+
+// Lista los reportes con su autor incrustado (usa $lookup en el backend).
+export async function listarReportesConUsuario(): Promise<RespuestaLista> {
+  const res = await fetch(`${BASE}/reportes/con-usuario`);
+  return manejarRespuesta<RespuestaLista>(res);
 }

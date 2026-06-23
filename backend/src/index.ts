@@ -4,6 +4,7 @@ import cors from "cors";
 import mongoose from "mongoose";
 import { conectarBaseDeDatos } from "./config/db";
 import reportesRouter from "./routes/reportes.routes";
+import usuariosRouter from "./routes/usuarios.routes";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -29,6 +30,9 @@ app.get("/api/salud", (_req, res) => {
 
 // Rutas de reportes (crear y listar)
 app.use("/api/reportes", reportesRouter);
+
+// Rutas de usuarios (crear y listar)
+app.use("/api/usuarios", usuariosRouter);
 
 /**
  * Arranque: primero conectamos a MongoDB y, solo si funciona,

@@ -9,11 +9,12 @@ import {
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 import {
-  listarReportes,
+  listarReportesConUsuario,
   crearReporte,
   obtenerEstadisticas,
   actualizarEstado,
   eliminarReporte,
+  listarUsuarios,
   TIPOS,
   GRAVEDADES,
   ESTADOS,
@@ -21,6 +22,7 @@ import {
   type Gravedad,
   type EstadoReporte,
   type Estadisticas,
+  type Usuario,
 } from "./api";
 
 // Centro del mapa: Villavicencio, Meta (Colombia). Leaflet usa [lat, lng].
@@ -65,6 +67,7 @@ function SelectorDeUbicacion({ onElegir }: { onElegir: (p: Punto) => void }) {
 
 function App() {
   const [reportes, setReportes] = useState<Reporte[]>([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,15 +76,24 @@ function App() {
   const [tipo, setTipo] = useState<string>(TIPOS[0]);
   const [descripcion, setDescripcion] = useState("");
   const [gravedad, setGravedad] = useState<Gravedad>("media");
+  const [reportadoPor, setReportadoPor] = useState(""); // "" = anónimo
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
-  // Al montar la página, pedimos los reportes y las estadísticas al backend.
-  useEffect(() => {
-    listarReportes()
+  // Trae los reportes (con su autor unido vía $lookup).
+  function refrescarReportes() {
+    listarReportesConUsuario()
       .then((data) => setReportes(data.reportes))
       .catch((e) => setError(e.message));
+  }
+
+  // Al montar la página: reportes, estadísticas y usuarios.
+  useEffect(() => {
+    refrescarReportes();
     cargarEstadisticas(setEstadisticas);
+    listarUsuarios()
+      .then((data) => setUsuarios(data.usuarios))
+      .catch(() => {});
   }, []);
 
   async function manejarEnvio(e: FormEvent) {
@@ -91,15 +103,16 @@ function App() {
     setEnviando(true);
     setMensaje(null);
     try {
-      const nuevo = await crearReporte({
+      await crearReporte({
         tipo,
         descripcion,
         gravedad,
         longitud: punto.lng,
         latitud: punto.lat,
+        reportadoPor: reportadoPor || undefined,
       });
-      // Lo agregamos al mapa al instante y refrescamos las estadísticas.
-      setReportes((prev) => [nuevo, ...prev]);
+      // Recargamos para que el reporte aparezca con su autor incrustado.
+      refrescarReportes();
       cargarEstadisticas(setEstadisticas);
       setMensaje("✅ Reporte creado");
       setDescripcion("");
@@ -115,7 +128,10 @@ function App() {
   async function cambiarEstado(id: string, estado: EstadoReporte) {
     try {
       const actualizado = await actualizarEstado(id, estado);
-      setReportes((prev) => prev.map((r) => (r._id === id ? actualizado : r)));
+      // Conservamos el autor unido (el PATCH no lo devuelve).
+      setReportes((prev) =>
+        prev.map((r) => (r._id === id ? { ...actualizado, usuario: r.usuario } : r))
+      );
       cargarEstadisticas(setEstadisticas);
     } catch (err) {
       setError((err as Error).message);
@@ -182,6 +198,21 @@ function App() {
                 {GRAVEDADES.map((g) => (
                   <option key={g} value={g}>
                     {g}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="campo">
+              Reportado por
+              <select
+                value={reportadoPor}
+                onChange={(e) => setReportadoPor(e.target.value)}
+              >
+                <option value="">Anónimo</option>
+                {usuarios.map((u) => (
+                  <option key={u._id} value={u._id}>
+                    {u.nombre}
                   </option>
                 ))}
               </select>
@@ -297,6 +328,8 @@ function App() {
                       ))}
                     </select>
                   </label>
+                  <br />
+                  <small>Por: {r.usuario ? r.usuario.nombre : "Anónimo"}</small>
                   <br />
                   <button
                     type="button"

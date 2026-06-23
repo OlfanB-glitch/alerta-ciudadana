@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { Reporte, type IReporte } from "../models/Reporte";
+import { Usuario } from "../models/Usuario";
 
 /**
  * POST /api/reportes
@@ -19,7 +20,23 @@ export async function crearReporte(req: Request, res: Response): Promise<void> {
       latitud,
       direccionTexto,
       fechaIncidente,
+      reportadoPor,
     } = req.body;
+
+    // Si viene un autor, validamos que sea un id válido y que el usuario exista.
+    if (reportadoPor !== undefined) {
+      if (!mongoose.isValidObjectId(reportadoPor)) {
+        res.status(400).json({ error: "El 'reportadoPor' no es un id válido" });
+        return;
+      }
+      const existe = await Usuario.exists({ _id: reportadoPor });
+      if (!existe) {
+        res
+          .status(400)
+          .json({ error: "El usuario indicado en 'reportadoPor' no existe" });
+        return;
+      }
+    }
 
     const nuevoReporte = await Reporte.create({
       tipo,
@@ -32,6 +49,7 @@ export async function crearReporte(req: Request, res: Response): Promise<void> {
           : undefined,
       direccionTexto,
       fechaIncidente,
+      reportadoPor,
     });
 
     res.status(201).json(nuevoReporte);
@@ -271,5 +289,37 @@ export async function eliminarReporte(
   } catch (error) {
     console.error("Error al eliminar el reporte:", error);
     res.status(500).json({ error: "Error interno al eliminar el reporte" });
+  }
+}
+
+/**
+ * GET /api/reportes/con-usuario
+ * Lista los reportes "uniendo" cada uno con su autor de la colección usuarios.
+ * $lookup hace el JOIN; $unwind aplana el array a un objeto (o null si no tiene autor).
+ */
+export async function listarReportesConUsuario(
+  _req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const reportes = await Reporte.aggregate([
+      {
+        $lookup: {
+          from: "usuarios", // colección a unir (Mongoose pluraliza "Usuario")
+          localField: "reportadoPor", // campo en reportes
+          foreignField: "_id", // campo en usuarios
+          as: "usuario", // dónde se guarda el resultado (un array)
+        },
+      },
+      // $lookup devuelve un array; lo aplanamos a objeto (o null si no hay autor).
+      { $unwind: { path: "$usuario", preserveNullAndEmptyArrays: true } },
+      { $sort: { createdAt: -1 } },
+      { $limit: 100 },
+    ]);
+
+    res.json({ total: reportes.length, reportes });
+  } catch (error) {
+    console.error("Error al listar los reportes con usuario:", error);
+    res.status(500).json({ error: "Error interno al listar los reportes" });
   }
 }
