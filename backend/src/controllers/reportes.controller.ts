@@ -76,3 +76,90 @@ export async function listarReportes(req: Request, res: Response): Promise<void>
     res.status(500).json({ error: "Error interno al listar los reportes" });
   }
 }
+
+/**
+ * GET /api/reportes/cerca?lng=...&lat=...&radio=...
+ * Devuelve los reportes dentro de un radio (en metros) de un punto,
+ * ordenados del más cercano al más lejano. Usa el índice 2dsphere.
+ * Filtros opcionales: tipo, desde, hasta (rango de fechaIncidente).
+ */
+export async function buscarReportesCerca(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const { lng, lat, radio, tipo, desde, hasta } = req.query;
+
+    const longitud = Number(lng);
+    const latitud = Number(lat);
+
+    // El centro de la búsqueda es obligatorio y debe ser válido.
+    if (
+      !Number.isFinite(longitud) ||
+      !Number.isFinite(latitud) ||
+      longitud < -180 ||
+      longitud > 180 ||
+      latitud < -90 ||
+      latitud > 90
+    ) {
+      res.status(400).json({
+        error: "Debes enviar 'lng' y 'lat' válidos. Ejemplo: ?lng=-74.08&lat=4.61",
+      });
+      return;
+    }
+
+    // Radio en metros (por defecto 1000 = 1 km).
+    const radioMetros = radio !== undefined ? Number(radio) : 1000;
+    if (!Number.isFinite(radioMetros) || radioMetros <= 0) {
+      res.status(400).json({
+        error: "El 'radio' debe ser un número de metros mayor que 0",
+      });
+      return;
+    }
+
+    // Rango opcional de fechas del incidente.
+    const rangoFecha: { $gte?: Date; $lte?: Date } = {};
+    if (typeof desde === "string") {
+      const d = new Date(desde);
+      if (!isNaN(d.getTime())) rangoFecha.$gte = d;
+    }
+    if (typeof hasta === "string") {
+      const h = new Date(hasta);
+      if (!isNaN(h.getTime())) rangoFecha.$lte = h;
+    }
+
+    // Filtro: condición geográfica + filtros opcionales.
+    const filtro: {
+      ubicacion: {
+        $near: {
+          $geometry: { type: "Point"; coordinates: [number, number] };
+          $maxDistance: number;
+        };
+      };
+      tipo?: IReporte["tipo"];
+      fechaIncidente?: { $gte?: Date; $lte?: Date };
+    } = {
+      ubicacion: {
+        $near: {
+          $geometry: { type: "Point", coordinates: [longitud, latitud] },
+          $maxDistance: radioMetros,
+        },
+      },
+    };
+    if (typeof tipo === "string") filtro.tipo = tipo as IReporte["tipo"];
+    if (Object.keys(rangoFecha).length > 0) filtro.fechaIncidente = rangoFecha;
+
+    // $near ya entrega los resultados ordenados del más cercano al más lejano.
+    const reportes = await Reporte.find(filtro).limit(100);
+
+    res.json({
+      centro: { longitud, latitud },
+      radioMetros,
+      total: reportes.length,
+      reportes,
+    });
+  } catch (error) {
+    console.error("Error en la búsqueda por cercanía:", error);
+    res.status(500).json({ error: "Error interno en la búsqueda por cercanía" });
+  }
+}
