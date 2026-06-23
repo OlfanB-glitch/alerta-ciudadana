@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import { conectarBaseDeDatos } from "./config/db";
+import reportesRouter from "./routes/reportes.routes";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -25,6 +26,9 @@ app.get("/api/salud", (_req, res) => {
     fecha: new Date().toISOString(),
   });
 });
+
+// Rutas de reportes (crear y listar)
+app.use("/api/reportes", reportesRouter);
 
 /**
  * Arranque: primero conectamos a MongoDB y, solo si funciona,
