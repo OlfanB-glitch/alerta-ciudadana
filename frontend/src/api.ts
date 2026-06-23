@@ -16,6 +16,13 @@ export const TIPOS = [
 
 export const GRAVEDADES: Gravedad[] = ["baja", "media", "alta"];
 
+export const ESTADOS: EstadoReporte[] = [
+  "nuevo",
+  "en_revision",
+  "resuelto",
+  "descartado",
+];
+
 // La forma de un reporte tal como lo devuelve el backend.
 export type Reporte = {
   _id: string;
@@ -82,4 +89,23 @@ export type Estadisticas = {
 export async function obtenerEstadisticas(): Promise<Estadisticas> {
   const res = await fetch(`${BASE}/reportes/estadisticas`);
   return manejarRespuesta<Estadisticas>(res);
+}
+
+// Cambia el estado de un reporte (PATCH) y devuelve el reporte actualizado.
+export async function actualizarEstado(
+  id: string,
+  estado: EstadoReporte
+): Promise<Reporte> {
+  const res = await fetch(`${BASE}/reportes/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ estado }),
+  });
+  return manejarRespuesta<Reporte>(res);
+}
+
+// Elimina un reporte por su id (DELETE).
+export async function eliminarReporte(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/reportes/${id}`, { method: "DELETE" });
+  await manejarRespuesta<{ mensaje: string }>(res);
 }

@@ -201,3 +201,75 @@ export async function estadisticasReportes(
     res.status(500).json({ error: "Error interno al calcular las estadísticas" });
   }
 }
+
+/**
+ * PATCH /api/reportes/:id
+ * Cambia el estado de un reporte (nuevo, en_revision, resuelto, descartado).
+ */
+export async function actualizarEstadoReporte(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      res.status(400).json({ error: "El id del reporte no es válido" });
+      return;
+    }
+
+    const { estado } = req.body;
+    if (typeof estado !== "string") {
+      res.status(400).json({ error: "Debes enviar el nuevo 'estado'" });
+      return;
+    }
+
+    // runValidators valida que el estado esté dentro del enum del modelo.
+    const reporte = await Reporte.findByIdAndUpdate(
+      id,
+      { estado },
+      { new: true, runValidators: true }
+    );
+    if (!reporte) {
+      res.status(404).json({ error: "No se encontró el reporte" });
+      return;
+    }
+
+    res.json(reporte);
+  } catch (error) {
+    if (error instanceof mongoose.Error.ValidationError) {
+      const detalles = Object.values(error.errors).map((e) => e.message);
+      res.status(400).json({ error: "Datos inválidos", detalles });
+      return;
+    }
+    console.error("Error al actualizar el reporte:", error);
+    res.status(500).json({ error: "Error interno al actualizar el reporte" });
+  }
+}
+
+/**
+ * DELETE /api/reportes/:id
+ * Elimina un reporte por su id.
+ */
+export async function eliminarReporte(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      res.status(400).json({ error: "El id del reporte no es válido" });
+      return;
+    }
+
+    const reporte = await Reporte.findByIdAndDelete(id);
+    if (!reporte) {
+      res.status(404).json({ error: "No se encontró el reporte" });
+      return;
+    }
+
+    res.json({ mensaje: "Reporte eliminado", id });
+  } catch (error) {
+    console.error("Error al eliminar el reporte:", error);
+    res.status(500).json({ error: "Error interno al eliminar el reporte" });
+  }
+}

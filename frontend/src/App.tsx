@@ -12,10 +12,14 @@ import {
   listarReportes,
   crearReporte,
   obtenerEstadisticas,
+  actualizarEstado,
+  eliminarReporte,
   TIPOS,
   GRAVEDADES,
+  ESTADOS,
   type Reporte,
   type Gravedad,
+  type EstadoReporte,
   type Estadisticas,
 } from "./api";
 
@@ -104,6 +108,28 @@ function App() {
       setMensaje("⚠️ " + (err as Error).message);
     } finally {
       setEnviando(false);
+    }
+  }
+
+  // Cambia el estado de un reporte y refleja el cambio en el mapa.
+  async function cambiarEstado(id: string, estado: EstadoReporte) {
+    try {
+      const actualizado = await actualizarEstado(id, estado);
+      setReportes((prev) => prev.map((r) => (r._id === id ? actualizado : r)));
+      cargarEstadisticas(setEstadisticas);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  // Elimina un reporte y lo quita del mapa.
+  async function borrarReporte(id: string) {
+    try {
+      await eliminarReporte(id);
+      setReportes((prev) => prev.filter((r) => r._id !== id));
+      cargarEstadisticas(setEstadisticas);
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
@@ -256,7 +282,29 @@ function App() {
                   <br />
                   <em>Gravedad: {r.gravedad}</em>
                   <br />
-                  <small>Estado: {r.estado}</small>
+                  <label>
+                    Estado:{" "}
+                    <select
+                      value={r.estado}
+                      onChange={(e) =>
+                        cambiarEstado(r._id, e.target.value as EstadoReporte)
+                      }
+                    >
+                      {ESTADOS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <br />
+                  <button
+                    type="button"
+                    onClick={() => borrarReporte(r._id)}
+                    style={{ marginTop: 6, color: "#c62828", cursor: "pointer" }}
+                  >
+                    Eliminar
+                  </button>
                 </Popup>
               </CircleMarker>
             );
