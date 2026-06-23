@@ -163,3 +163,41 @@ export async function buscarReportesCerca(
     res.status(500).json({ error: "Error interno en la búsqueda por cercanía" });
   }
 }
+
+/**
+ * GET /api/reportes/estadisticas
+ * Conteos de reportes por tipo, por gravedad y por estado, más el total.
+ * Usa el pipeline de agregación de MongoDB con $facet, que corre varias
+ * sub-tuberías ($group + $sort) en una sola consulta.
+ */
+export async function estadisticasReportes(
+  _req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const [resultado] = await Reporte.aggregate([
+      {
+        $facet: {
+          porTipo: [
+            { $group: { _id: "$tipo", total: { $sum: 1 } } },
+            { $sort: { total: -1 } },
+          ],
+          porGravedad: [{ $group: { _id: "$gravedad", total: { $sum: 1 } } }],
+          porEstado: [{ $group: { _id: "$estado", total: { $sum: 1 } } }],
+          total: [{ $count: "valor" }],
+        },
+      },
+    ]);
+
+    // $facet devuelve arrays; los dejamos en un formato cómodo para el frontend.
+    res.json({
+      total: resultado.total[0]?.valor ?? 0,
+      porTipo: resultado.porTipo,
+      porGravedad: resultado.porGravedad,
+      porEstado: resultado.porEstado,
+    });
+  } catch (error) {
+    console.error("Error al calcular las estadísticas:", error);
+    res.status(500).json({ error: "Error interno al calcular las estadísticas" });
+  }
+}

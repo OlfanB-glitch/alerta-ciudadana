@@ -68,3 +68,18 @@ export async function crearReporte(datos: NuevoReporte): Promise<Reporte> {
   });
   return manejarRespuesta<Reporte>(res);
 }
+
+// Un conteo: _id es el valor agrupado (p. ej. "robo") y total cuántos hay.
+export type Conteo = { _id: string; total: number };
+
+export type Estadisticas = {
+  total: number;
+  porTipo: Conteo[];
+  porGravedad: Conteo[];
+  porEstado: Conteo[];
+};
+
+export async function obtenerEstadisticas(): Promise<Estadisticas> {
+  const res = await fetch(`${BASE}/reportes/estadisticas`);
+  return manejarRespuesta<Estadisticas>(res);
+}

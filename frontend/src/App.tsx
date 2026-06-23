@@ -11,10 +11,12 @@ import "./App.css";
 import {
   listarReportes,
   crearReporte,
+  obtenerEstadisticas,
   TIPOS,
   GRAVEDADES,
   type Reporte,
   type Gravedad,
+  type Estadisticas,
 } from "./api";
 
 // Centro del mapa: Villavicencio, Meta (Colombia). Leaflet usa [lat, lng].
@@ -27,7 +29,7 @@ const COLOR_GRAVEDAD: Record<Gravedad, string> = {
   alta: "#c62828", // rojo
 };
 
-// Etiquetas legibles para el desplegable de tipo.
+// Etiquetas legibles para el desplegable y las estadísticas.
 const ETIQUETA_TIPO: Record<string, string> = {
   robo: "Robo",
   hurto_celular: "Hurto de celular",
@@ -37,6 +39,15 @@ const ETIQUETA_TIPO: Record<string, string> = {
 };
 
 type Punto = { lat: number; lng: number };
+
+// Carga las estadísticas del backend y las entrega al setter.
+function cargarEstadisticas(set: (e: Estadisticas) => void) {
+  obtenerEstadisticas()
+    .then(set)
+    .catch(() => {
+      // Si fallan las estadísticas, no rompemos el resto de la página.
+    });
+}
 
 // Componente invisible que escucha los clics en el mapa.
 function SelectorDeUbicacion({ onElegir }: { onElegir: (p: Punto) => void }) {
@@ -50,6 +61,7 @@ function SelectorDeUbicacion({ onElegir }: { onElegir: (p: Punto) => void }) {
 
 function App() {
   const [reportes, setReportes] = useState<Reporte[]>([]);
+  const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Estado del formulario.
@@ -60,11 +72,12 @@ function App() {
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
-  // Al montar la página, pedimos los reportes al backend.
+  // Al montar la página, pedimos los reportes y las estadísticas al backend.
   useEffect(() => {
     listarReportes()
       .then((data) => setReportes(data.reportes))
       .catch((e) => setError(e.message));
+    cargarEstadisticas(setEstadisticas);
   }, []);
 
   async function manejarEnvio(e: FormEvent) {
@@ -81,8 +94,9 @@ function App() {
         longitud: punto.lng,
         latitud: punto.lat,
       });
-      // Lo agregamos al mapa al instante, sin recargar.
+      // Lo agregamos al mapa al instante y refrescamos las estadísticas.
       setReportes((prev) => [nuevo, ...prev]);
+      cargarEstadisticas(setEstadisticas);
       setMensaje("✅ Reporte creado");
       setDescripcion("");
       setPunto(null);
@@ -163,6 +177,43 @@ function App() {
           </form>
 
           {mensaje && <p className="mensaje">{mensaje}</p>}
+
+          {estadisticas && (
+            <section className="estadisticas">
+              <h2>Estadísticas</h2>
+              <p>
+                Total: <strong>{estadisticas.total}</strong>
+              </p>
+
+              <h3>Por gravedad</h3>
+              <ul>
+                {estadisticas.porGravedad.map((c) => (
+                  <li key={c._id}>
+                    <i style={{ background: COLOR_GRAVEDAD[c._id as Gravedad] }} />
+                    {c._id}: {c.total}
+                  </li>
+                ))}
+              </ul>
+
+              <h3>Por tipo</h3>
+              <ul>
+                {estadisticas.porTipo.map((c) => (
+                  <li key={c._id}>
+                    {ETIQUETA_TIPO[c._id] ?? c._id}: {c.total}
+                  </li>
+                ))}
+              </ul>
+
+              <h3>Por estado</h3>
+              <ul>
+                {estadisticas.porEstado.map((c) => (
+                  <li key={c._id}>
+                    {c._id}: {c.total}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </aside>
 
         <MapContainer center={VILLAVICENCIO} zoom={13} className="mapa">
