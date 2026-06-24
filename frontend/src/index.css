@@ -1,6 +1,38 @@
 :root {
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
-  color-scheme: light dark;
+  /* Marca: azul confianza */
+  --azul-900: #0b1f4d;
+  --azul-800: #15307a;
+  --azul-700: #1d4ed8;
+  --azul-600: #2563eb;
+  --azul-100: #dbeafe;
+  --azul-grad: linear-gradient(135deg, #15307a 0%, #2563eb 100%);
+
+  /* Neutros */
+  --tinta: #0f172a;
+  --gris: #64748b;
+  --gris-claro: #94a3b8;
+  --linea: #e2e8f0;
+  --fondo: #f1f5f9;
+  --panel: #ffffff;
+
+  /* Semáforo de gravedad */
+  --baja: #16a34a;
+  --media: #f59e0b;
+  --alta: #e11d48;
+
+  /* Forma y profundidad */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --sombra: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --sombra-suave: 0 1px 3px rgba(15, 23, 42, 0.08);
+
+  --sans: "Public Sans", system-ui, sans-serif;
+  --display: "Sora", system-ui, sans-serif;
+
+  font-family: var(--sans);
+  color: var(--tinta);
+  color-scheme: light;
 }
 
 * {
@@ -12,4 +44,15 @@ body,
 #root {
   height: 100%;
   margin: 0;
+}
+
+body {
+  background: var(--fondo);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  letter-spacing: -0.01em;
 }
