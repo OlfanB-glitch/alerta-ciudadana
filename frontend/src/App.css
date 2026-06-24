@@ -142,6 +142,17 @@
   display: inline-block;
 }
 
+/* Buscar por zona (panel) */
+.busqueda {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ddd;
+}
+
+.busqueda h2 {
+  margin: 0 0 8px;
+}
+
 /* El mapa ocupa el espacio restante. Leaflet necesita una altura concreta. */
 .mapa {
   flex: 1;

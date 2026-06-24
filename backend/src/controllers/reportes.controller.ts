@@ -146,29 +146,35 @@ export async function buscarReportesCerca(
       if (!isNaN(h.getTime())) rangoFecha.$lte = h;
     }
 
-    // Filtro: condición geográfica + filtros opcionales.
-    const filtro: {
-      ubicacion: {
-        $near: {
-          $geometry: { type: "Point"; coordinates: [number, number] };
-          $maxDistance: number;
-        };
-      };
-      tipo?: IReporte["tipo"];
-      fechaIncidente?: { $gte?: Date; $lte?: Date };
-    } = {
-      ubicacion: {
-        $near: {
-          $geometry: { type: "Point", coordinates: [longitud, latitud] },
-          $maxDistance: radioMetros,
+    // Filtros opcionales que viajan dentro de $geoNear (query).
+    const query: Record<string, unknown> = {};
+    if (typeof tipo === "string") query.tipo = tipo;
+    if (Object.keys(rangoFecha).length > 0) query.fechaIncidente = rangoFecha;
+
+    // $geoNear busca por cercanía sobre el índice 2dsphere, calcula la distancia
+    // de cada reporte al centro y ordena del más cercano al más lejano.
+    // Luego $lookup + $unwind unen el autor (igual que en /con-usuario).
+    const reportes = await Reporte.aggregate([
+      {
+        $geoNear: {
+          near: { type: "Point", coordinates: [longitud, latitud] },
+          distanceField: "distanciaMetros",
+          maxDistance: radioMetros,
+          spherical: true,
+          query,
         },
       },
-    };
-    if (typeof tipo === "string") filtro.tipo = tipo as IReporte["tipo"];
-    if (Object.keys(rangoFecha).length > 0) filtro.fechaIncidente = rangoFecha;
-
-    // $near ya entrega los resultados ordenados del más cercano al más lejano.
-    const reportes = await Reporte.find(filtro).limit(100);
+      {
+        $lookup: {
+          from: "usuarios",
+          localField: "reportadoPor",
+          foreignField: "_id",
+          as: "usuario",
+        },
+      },
+      { $unwind: { path: "$usuario", preserveNullAndEmptyArrays: true } },
+      { $limit: 100 },
+    ]);
 
     res.json({
       centro: { longitud, latitud },

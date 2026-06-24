@@ -3,6 +3,7 @@ import {
   MapContainer,
   TileLayer,
   CircleMarker,
+  Circle,
   Popup,
   useMapEvents,
 } from "react-leaflet";
@@ -10,6 +11,7 @@ import "leaflet/dist/leaflet.css";
 import "./App.css";
 import {
   listarReportesConUsuario,
+  buscarReportesCerca,
   crearReporte,
   obtenerEstadisticas,
   actualizarEstado,
@@ -45,6 +47,7 @@ const ETIQUETA_TIPO: Record<string, string> = {
 };
 
 type Punto = { lat: number; lng: number };
+type Circulo = { lat: number; lng: number; radio: number };
 
 // Carga las estadísticas del backend y las entrega al setter.
 function cargarEstadisticas(set: (e: Estadisticas) => void) {
@@ -80,7 +83,12 @@ function App() {
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
-  // Trae los reportes (con su autor unido vía $lookup).
+  // Estado de la búsqueda por zona.
+  const [radio, setRadio] = useState(2000);
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [circulo, setCirculo] = useState<Circulo | null>(null);
+
+  // Trae todos los reportes (con su autor unido vía $lookup).
   function refrescarReportes() {
     listarReportesConUsuario()
       .then((data) => setReportes(data.reportes))
@@ -111,7 +119,8 @@ function App() {
         latitud: punto.lat,
         reportadoPor: reportadoPor || undefined,
       });
-      // Recargamos para que el reporte aparezca con su autor incrustado.
+      // Volvemos a la vista completa con el nuevo reporte incluido.
+      setCirculo(null);
       refrescarReportes();
       cargarEstadisticas(setEstadisticas);
       setMensaje("✅ Reporte creado");
@@ -124,13 +133,42 @@ function App() {
     }
   }
 
+  // Busca los reportes dentro del radio alrededor del punto elegido.
+  async function buscarPorZona() {
+    if (!punto) return;
+    try {
+      const data = await buscarReportesCerca(
+        punto.lng,
+        punto.lat,
+        radio,
+        filtroTipo || undefined
+      );
+      setReportes(data.reportes);
+      setCirculo({ lat: punto.lat, lng: punto.lng, radio });
+      setMensaje(`🔎 ${data.reportes.length} reporte(s) dentro de ${radio} m`);
+    } catch (err) {
+      setMensaje("⚠️ " + (err as Error).message);
+    }
+  }
+
+  // Vuelve a mostrar todos los reportes.
+  function verTodos() {
+    setCirculo(null);
+    setMensaje(null);
+    refrescarReportes();
+  }
+
   // Cambia el estado de un reporte y refleja el cambio en el mapa.
   async function cambiarEstado(id: string, estado: EstadoReporte) {
     try {
       const actualizado = await actualizarEstado(id, estado);
-      // Conservamos el autor unido (el PATCH no lo devuelve).
+      // Conservamos el autor y la distancia (el PATCH no los devuelve).
       setReportes((prev) =>
-        prev.map((r) => (r._id === id ? { ...actualizado, usuario: r.usuario } : r))
+        prev.map((r) =>
+          r._id === id
+            ? { ...actualizado, usuario: r.usuario, distanciaMetros: r.distanciaMetros }
+            : r
+        )
       );
       cargarEstadisticas(setEstadisticas);
     } catch (err) {
@@ -235,6 +273,54 @@ function App() {
 
           {mensaje && <p className="mensaje">{mensaje}</p>}
 
+          <section className="busqueda">
+            <h2>Buscar por zona</h2>
+            <p className="ayuda">
+              {punto
+                ? "Centro: el punto elegido en el mapa."
+                : "Haz clic en el mapa para fijar el centro."}
+            </p>
+
+            <label className="campo">
+              Radio (metros)
+              <input
+                type="number"
+                min={100}
+                step={100}
+                value={radio}
+                onChange={(e) => setRadio(Number(e.target.value))}
+              />
+            </label>
+
+            <label className="campo">
+              Tipo (opcional)
+              <select
+                value={filtroTipo}
+                onChange={(e) => setFiltroTipo(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {TIPOS.map((t) => (
+                  <option key={t} value={t}>
+                    {ETIQUETA_TIPO[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button type="button" onClick={buscarPorZona} disabled={!punto}>
+              Buscar por zona
+            </button>
+            {circulo && (
+              <button
+                type="button"
+                onClick={verTodos}
+                style={{ marginTop: 8, background: "#6b7280" }}
+              >
+                Ver todos
+              </button>
+            )}
+          </section>
+
           {estadisticas && (
             <section className="estadisticas">
               <h2>Estadísticas</h2>
@@ -281,6 +367,15 @@ function App() {
 
           <SelectorDeUbicacion onElegir={setPunto} />
 
+          {/* Círculo que muestra la zona buscada (radio). */}
+          {circulo && (
+            <Circle
+              center={[circulo.lat, circulo.lng]}
+              radius={circulo.radio}
+              pathOptions={{ color: "#1565c0", fillOpacity: 0.05 }}
+            />
+          )}
+
           {/* Marcador temporal del punto que el usuario está eligiendo. */}
           {punto && (
             <CircleMarker
@@ -288,7 +383,7 @@ function App() {
               radius={8}
               pathOptions={{ color: "#1565c0", fillColor: "#1565c0", fillOpacity: 0.5 }}
             >
-              <Popup>Aquí se creará el reporte</Popup>
+              <Popup>Punto elegido (crear o buscar por zona)</Popup>
             </CircleMarker>
           )}
 
@@ -313,6 +408,12 @@ function App() {
                   <br />
                   <em>Gravedad: {r.gravedad}</em>
                   <br />
+                  {typeof r.distanciaMetros === "number" && (
+                    <>
+                      <small>A {Math.round(r.distanciaMetros)} m del centro</small>
+                      <br />
+                    </>
+                  )}
                   <label>
                     Estado:{" "}
                     <select

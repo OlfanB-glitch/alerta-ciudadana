@@ -35,6 +35,7 @@ export type Reporte = {
   fechaIncidente: string;
   reportadoPor?: string; // id del autor (en la lista normal)
   usuario?: { _id: string; nombre: string; email: string } | null; // autor unido vía $lookup
+  distanciaMetros?: number; // distancia al centro (solo en la búsqueda por zona)
   createdAt: string;
   updatedAt: string;
 };
@@ -131,5 +132,22 @@ export async function listarUsuarios(): Promise<{
 // Lista los reportes con su autor incrustado (usa $lookup en el backend).
 export async function listarReportesConUsuario(): Promise<RespuestaLista> {
   const res = await fetch(`${BASE}/reportes/con-usuario`);
+  return manejarRespuesta<RespuestaLista>(res);
+}
+
+// Busca reportes dentro de un radio (en metros) de un punto, con filtro opcional por tipo.
+export async function buscarReportesCerca(
+  lng: number,
+  lat: number,
+  radio: number,
+  tipo?: string
+): Promise<RespuestaLista> {
+  const params = new URLSearchParams({
+    lng: String(lng),
+    lat: String(lat),
+    radio: String(radio),
+  });
+  if (tipo) params.set("tipo", tipo);
+  const res = await fetch(`${BASE}/reportes/cerca?${params.toString()}`);
   return manejarRespuesta<RespuestaLista>(res);
 }
