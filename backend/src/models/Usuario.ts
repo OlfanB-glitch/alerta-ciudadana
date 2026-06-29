@@ -9,6 +9,7 @@ export interface IUsuario {
   nombre: string;
   email: string;
   rol: Rol;
+  passwordHash: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +32,11 @@ const usuarioSchema = new Schema<IUsuario>(
       type: String,
       enum: { values: [...ROLES], message: "Rol no válido: {VALUE}" },
       default: "ciudadano",
+    },
+    passwordHash: {
+      type: String,
+      required: [true, "La contraseña es obligatoria"],
+      select: false, // no se devuelve en las consultas por defecto
     },
   },
   { timestamps: true }

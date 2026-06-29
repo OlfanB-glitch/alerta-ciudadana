@@ -19,7 +19,11 @@ import {
   obtenerEstadisticas,
   actualizarEstado,
   eliminarReporte,
-  listarUsuarios,
+  registrar,
+  iniciarSesionApi,
+  guardarSesion,
+  obtenerUsuarioGuardado,
+  cerrarSesion,
   TIPOS,
   GRAVEDADES,
   ESTADOS,
@@ -63,7 +67,7 @@ const ICONO_TIPO: Record<string, string> = {
 
 type Punto = { lat: number; lng: number };
 type Circulo = { lat: number; lng: number; radio: number };
-type Vista = "inicio" | "nuevo" | "mapa" | "estadisticas" | "consejos" | "ayuda";
+type Vista = "inicio" | "nuevo" | "mapa" | "estadisticas" | "consejos" | "ayuda" | "auth";
 
 const NAV: { id: Vista; icono: string; texto: string }[] = [
   { id: "inicio", icono: "🏠", texto: "Inicio" },
@@ -122,6 +126,111 @@ function VolarA({ destino }: { destino: Punto | null }) {
   return null;
 }
 
+// Iniciales del nombre para el avatar.
+function iniciales(nombre: string): string {
+  return nombre
+    .trim()
+    .split(/\s+/)
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+// Pantalla de inicio de sesión / registro.
+function VistaAuth({ onAutenticado }: { onAutenticado: (u: Usuario) => void }) {
+  const [modo, setModo] = useState<"login" | "registro">("login");
+  const [nombre, setNombre] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function enviar(e: FormEvent) {
+    e.preventDefault();
+    setCargando(true);
+    setError(null);
+    try {
+      const resp =
+        modo === "registro"
+          ? await registrar(nombre, email, password)
+          : await iniciarSesionApi(email, password);
+      guardarSesion(resp.token, resp.usuario);
+      onAutenticado(resp.usuario);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  return (
+    <div className="vista-auth">
+      <div className="card card-auth">
+        <h2 className="card-titulo">
+          {modo === "registro" ? "📝 Crear cuenta" : "🔐 Iniciar sesión"}
+        </h2>
+        <p className="ayuda">
+          {modo === "registro"
+            ? "Regístrate para reportar incidentes."
+            : "Ingresa para reportar y gestionar tus reportes."}
+        </p>
+        <form onSubmit={enviar}>
+          {modo === "registro" && (
+            <label className="campo">
+              Nombre
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Tu nombre"
+              />
+            </label>
+          )}
+          <label className="campo">
+            Correo
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tucorreo@ejemplo.com"
+            />
+          </label>
+          <label className="campo">
+            Contraseña
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+            />
+          </label>
+          <button type="submit" className="btn btn-primario" disabled={cargando}>
+            {cargando
+              ? "Enviando…"
+              : modo === "registro"
+                ? "Crear cuenta"
+                : "Iniciar sesión"}
+          </button>
+        </form>
+        {error && <p className="auth-error">⚠️ {error}</p>}
+        <p className="auth-cambiar">
+          {modo === "registro" ? "¿Ya tienes cuenta? " : "¿No tienes cuenta? "}
+          <button
+            type="button"
+            className="enlace"
+            onClick={() => {
+              setModo(modo === "registro" ? "login" : "registro");
+              setError(null);
+            }}
+          >
+            {modo === "registro" ? "Inicia sesión" : "Regístrate"}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // Barra lateral de navegación.
 function Sidebar({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista) => void }) {
   return (
@@ -143,8 +252,18 @@ function Sidebar({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista) => 
   );
 }
 
-// Barra superior con título, chips de gravedad, campana y avatar.
-function Topbar({ total }: { total: number }) {
+// Barra superior con título, chips de gravedad, campana y sesión.
+function Topbar({
+  total,
+  usuario,
+  onIniciarSesion,
+  onCerrarSesion,
+}: {
+  total: number;
+  usuario: Usuario | null;
+  onIniciarSesion: () => void;
+  onCerrarSesion: () => void;
+}) {
   return (
     <header className="topbar">
       <div className="tb-fila">
@@ -157,7 +276,21 @@ function Topbar({ total }: { total: number }) {
             🔔
             {total > 0 && <span className="punto-noti">{total}</span>}
           </button>
-          <div className="avatar">AC</div>
+          {usuario ? (
+            <div className="sesion">
+              <div className="avatar" title={usuario.nombre}>
+                {iniciales(usuario.nombre)}
+              </div>
+              <span className="sesion-nombre">{usuario.nombre}</span>
+              <button type="button" className="btn-salir" onClick={onCerrarSesion}>
+                Salir
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="btn-entrar" onClick={onIniciarSesion}>
+              Iniciar sesión
+            </button>
+          )}
         </div>
       </div>
       <div className="tb-chips">
@@ -178,8 +311,10 @@ function Topbar({ total }: { total: number }) {
 
 function App() {
   const [vista, setVista] = useState<Vista>("inicio");
+  const [usuario, setUsuario] = useState<Usuario | null>(() =>
+    obtenerUsuarioGuardado()
+  );
   const [reportes, setReportes] = useState<Reporte[]>([]);
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -188,7 +323,6 @@ function App() {
   const [tipo, setTipo] = useState<string>(TIPOS[0]);
   const [descripcion, setDescripcion] = useState("");
   const [gravedad, setGravedad] = useState<Gravedad>("media");
-  const [reportadoPor, setReportadoPor] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [ubicando, setUbicando] = useState(false);
@@ -208,9 +342,6 @@ function App() {
   useEffect(() => {
     refrescarReportes();
     cargarEstadisticas(setEstadisticas);
-    listarUsuarios()
-      .then((data) => setUsuarios(data.usuarios))
-      .catch(() => {});
   }, []);
 
   async function manejarEnvio(e: FormEvent) {
@@ -226,7 +357,6 @@ function App() {
         gravedad,
         longitud: punto.lng,
         latitud: punto.lat,
-        reportadoPor: reportadoPor || undefined,
       });
       setCirculo(null);
       refrescarReportes();
@@ -300,6 +430,18 @@ function App() {
     refrescarReportes();
   }
 
+  function alAutenticar(u: Usuario) {
+    setUsuario(u);
+    setError(null);
+    setVista("inicio");
+  }
+
+  function salir() {
+    cerrarSesion();
+    setUsuario(null);
+    setVista("inicio");
+  }
+
   async function cambiarEstado(id: string, estado: EstadoReporte) {
     try {
       const actualizado = await actualizarEstado(id, estado);
@@ -326,6 +468,9 @@ function App() {
     }
   }
 
+  // ¿El reporte pertenece al usuario con sesión iniciada?
+  const esMio = (r: Reporte) => !!usuario && r.reportadoPor === usuario._id;
+
   // Marcadores de reportes (compartidos por el mapa grande).
   const marcadores = reportes.map((r) => {
     const [lng, lat] = r.ubicacion.coordinates;
@@ -348,27 +493,33 @@ function App() {
               📏 A {Math.round(r.distanciaMetros)} m del centro
             </div>
           )}
-          <label className="campo" style={{ margin: "8px 0" }}>
-            Estado
-            <select
-              value={r.estado}
-              onChange={(e) => cambiarEstado(r._id, e.target.value as EstadoReporte)}
-            >
-              {ESTADOS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
           <div className="popup-fila">👤 {r.usuario ? r.usuario.nombre : "Anónimo"}</div>
-          <button
-            type="button"
-            className="popup-eliminar"
-            onClick={() => borrarReporte(r._id)}
-          >
-            Eliminar
-          </button>
+          {esMio(r) && (
+            <>
+              <label className="campo" style={{ margin: "8px 0" }}>
+                Estado
+                <select
+                  value={r.estado}
+                  onChange={(e) =>
+                    cambiarEstado(r._id, e.target.value as EstadoReporte)
+                  }
+                >
+                  {ESTADOS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="popup-eliminar"
+                onClick={() => borrarReporte(r._id)}
+              >
+                Eliminar
+              </button>
+            </>
+          )}
         </Popup>
       </Marker>
     );
@@ -379,10 +530,18 @@ function App() {
       <Sidebar vista={vista} onCambiar={setVista} />
 
       <div className="main">
-        <Topbar total={reportes.length} />
+        <Topbar
+          total={reportes.length}
+          usuario={usuario}
+          onIniciarSesion={() => setVista("auth")}
+          onCerrarSesion={salir}
+        />
 
         <div className="vista">
           {error && <div className="banner-error">⚠️ {error}</div>}
+
+          {/* ============ AUTENTICACIÓN ============ */}
+          {vista === "auth" && <VistaAuth onAutenticado={alAutenticar} />}
 
           {/* ============ INICIO ============ */}
           {vista === "inicio" && (
@@ -432,7 +591,7 @@ function App() {
           )}
 
           {/* ============ NUEVO REPORTE ============ */}
-          {vista === "nuevo" && (
+          {vista === "nuevo" && usuario && (
             <div className="card card-form">
               <div className="form-encabezado">
                 <span className="form-ico">📝</span>
@@ -473,29 +632,12 @@ function App() {
                   </label>
                 </div>
 
-                <div className="grid-2">
-                  <label className="campo">
-                    Reportado por
-                    <select
-                      value={reportadoPor}
-                      onChange={(e) => setReportadoPor(e.target.value)}
-                    >
-                      <option value="">👤 Anónimo</option>
-                      {usuarios.map((u) => (
-                        <option key={u._id} value={u._id}>
-                          {u.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <div className="callout">
-                    <span className="callout-ico">🔒</span>
-                    <div>
-                      <strong>Tu identidad está protegida.</strong>
-                      <br />
-                      Nunca compartiremos tus datos.
-                    </div>
+                <div className="callout">
+                  <span className="callout-ico">👤</span>
+                  <div>
+                    <strong>Reportando como {usuario?.nombre}.</strong>
+                    <br />
+                    El reporte quedará asociado a tu cuenta.
                   </div>
                 </div>
 
@@ -565,6 +707,26 @@ function App() {
                   </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* ============ NUEVO REPORTE (sin sesión) ============ */}
+          {vista === "nuevo" && !usuario && (
+            <div className="vista-auth">
+              <div className="card card-auth">
+                <h2 className="card-titulo">🔐 Inicia sesión para reportar</h2>
+                <p className="ayuda">
+                  Necesitas una cuenta para crear reportes y gestionarlos. Consultar
+                  el mapa es libre.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-primario"
+                  onClick={() => setVista("auth")}
+                >
+                  Iniciar sesión / Crear cuenta
+                </button>
+              </div>
             </div>
           )}
 

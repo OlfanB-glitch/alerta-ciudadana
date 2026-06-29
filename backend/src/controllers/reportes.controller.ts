@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { Reporte, type IReporte } from "../models/Reporte";
-import { Usuario } from "../models/Usuario";
 
 /**
  * POST /api/reportes
@@ -20,23 +19,7 @@ export async function crearReporte(req: Request, res: Response): Promise<void> {
       latitud,
       direccionTexto,
       fechaIncidente,
-      reportadoPor,
     } = req.body;
-
-    // Si viene un autor, validamos que sea un id válido y que el usuario exista.
-    if (reportadoPor !== undefined) {
-      if (!mongoose.isValidObjectId(reportadoPor)) {
-        res.status(400).json({ error: "El 'reportadoPor' no es un id válido" });
-        return;
-      }
-      const existe = await Usuario.exists({ _id: reportadoPor });
-      if (!existe) {
-        res
-          .status(400)
-          .json({ error: "El usuario indicado en 'reportadoPor' no existe" });
-        return;
-      }
-    }
 
     const nuevoReporte = await Reporte.create({
       tipo,
@@ -49,7 +32,7 @@ export async function crearReporte(req: Request, res: Response): Promise<void> {
           : undefined,
       direccionTexto,
       fechaIncidente,
-      reportadoPor,
+      reportadoPor: req.usuarioId, // el autor es el usuario autenticado
     });
 
     res.status(201).json(nuevoReporte);
@@ -247,16 +230,21 @@ export async function actualizarEstadoReporte(
       return;
     }
 
-    // runValidators valida que el estado esté dentro del enum del modelo.
-    const reporte = await Reporte.findByIdAndUpdate(
-      id,
-      { estado },
-      { new: true, runValidators: true }
-    );
+    const reporte = await Reporte.findById(id);
     if (!reporte) {
       res.status(404).json({ error: "No se encontró el reporte" });
       return;
     }
+    // Solo el autor puede modificar su reporte.
+    if (String(reporte.reportadoPor) !== req.usuarioId) {
+      res
+        .status(403)
+        .json({ error: "No puedes modificar un reporte que no es tuyo" });
+      return;
+    }
+
+    reporte.estado = estado as IReporte["estado"]; // se valida contra el enum al guardar
+    await reporte.save();
 
     res.json(reporte);
   } catch (error) {
@@ -285,12 +273,20 @@ export async function eliminarReporte(
       return;
     }
 
-    const reporte = await Reporte.findByIdAndDelete(id);
+    const reporte = await Reporte.findById(id);
     if (!reporte) {
       res.status(404).json({ error: "No se encontró el reporte" });
       return;
     }
+    // Solo el autor puede eliminar su reporte.
+    if (String(reporte.reportadoPor) !== req.usuarioId) {
+      res
+        .status(403)
+        .json({ error: "No puedes eliminar un reporte que no es tuyo" });
+      return;
+    }
 
+    await reporte.deleteOne();
     res.json({ mensaje: "Reporte eliminado", id });
   } catch (error) {
     console.error("Error al eliminar el reporte:", error);

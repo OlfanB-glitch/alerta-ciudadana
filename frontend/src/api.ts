@@ -2,6 +2,35 @@
 
 const BASE = "/api";
 
+// ===== Sesión (token JWT guardado en el navegador) =====
+const CLAVE_TOKEN = "alerta_token";
+const CLAVE_USUARIO = "alerta_usuario";
+
+export function obtenerToken(): string | null {
+  return localStorage.getItem(CLAVE_TOKEN);
+}
+
+export function guardarSesion(token: string, usuario: Usuario) {
+  localStorage.setItem(CLAVE_TOKEN, token);
+  localStorage.setItem(CLAVE_USUARIO, JSON.stringify(usuario));
+}
+
+export function obtenerUsuarioGuardado(): Usuario | null {
+  const guardado = localStorage.getItem(CLAVE_USUARIO);
+  return guardado ? (JSON.parse(guardado) as Usuario) : null;
+}
+
+export function cerrarSesion() {
+  localStorage.removeItem(CLAVE_TOKEN);
+  localStorage.removeItem(CLAVE_USUARIO);
+}
+
+// Cabecera de autorización con el token (si hay sesión iniciada).
+function encabezadosAuth(): Record<string, string> {
+  const token = obtenerToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export type Gravedad = "baja" | "media" | "alta";
 export type EstadoReporte = "nuevo" | "en_revision" | "resuelto" | "descartado";
 
@@ -74,7 +103,7 @@ export async function listarReportes(): Promise<RespuestaLista> {
 export async function crearReporte(datos: NuevoReporte): Promise<Reporte> {
   const res = await fetch(`${BASE}/reportes`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...encabezadosAuth() },
     body: JSON.stringify(datos),
   });
   return manejarRespuesta<Reporte>(res);
@@ -102,7 +131,7 @@ export async function actualizarEstado(
 ): Promise<Reporte> {
   const res = await fetch(`${BASE}/reportes/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...encabezadosAuth() },
     body: JSON.stringify({ estado }),
   });
   return manejarRespuesta<Reporte>(res);
@@ -110,7 +139,10 @@ export async function actualizarEstado(
 
 // Elimina un reporte por su id (DELETE).
 export async function eliminarReporte(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/reportes/${id}`, { method: "DELETE" });
+  const res = await fetch(`${BASE}/reportes/${id}`, {
+    method: "DELETE",
+    headers: { ...encabezadosAuth() },
+  });
   await manejarRespuesta<{ mensaje: string }>(res);
 }
 
@@ -127,6 +159,34 @@ export async function listarUsuarios(): Promise<{
 }> {
   const res = await fetch(`${BASE}/usuarios`);
   return manejarRespuesta(res);
+}
+
+// ===== Autenticación =====
+export type RespuestaAuth = { token: string; usuario: Usuario };
+
+export async function registrar(
+  nombre: string,
+  email: string,
+  password: string
+): Promise<RespuestaAuth> {
+  const res = await fetch(`${BASE}/usuarios/registro`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre, email, password }),
+  });
+  return manejarRespuesta<RespuestaAuth>(res);
+}
+
+export async function iniciarSesionApi(
+  email: string,
+  password: string
+): Promise<RespuestaAuth> {
+  const res = await fetch(`${BASE}/usuarios/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  return manejarRespuesta<RespuestaAuth>(res);
 }
 
 // Lista los reportes con su autor incrustado (usa $lookup en el backend).

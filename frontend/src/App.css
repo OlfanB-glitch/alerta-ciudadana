@@ -176,6 +176,84 @@
   border-radius: 50%;
 }
 
+.sesion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sesion-nombre {
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-salir,
+.btn-entrar {
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 999px;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-entrar {
+  color: var(--azul-700);
+  background: #fff;
+}
+
+.btn-salir {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Pantalla de login / registro */
+.vista-auth {
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+}
+
+.card-auth {
+  width: 100%;
+  max-width: 420px;
+}
+
+.auth-error {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #9f1239;
+  background: #fff1f3;
+  border: 1px solid #fecdd6;
+  border-radius: var(--r-md);
+}
+
+.auth-cambiar {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--gris);
+  text-align: center;
+}
+
+.enlace {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--azul-700);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .tb-chips {
   display: flex;
   align-items: center;

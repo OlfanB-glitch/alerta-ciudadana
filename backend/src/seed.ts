@@ -1,5 +1,6 @@
 import "dotenv/config";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import { conectarBaseDeDatos } from "./config/db";
 import { Reporte } from "./models/Reporte";
 import { Usuario } from "./models/Usuario";
@@ -16,11 +17,12 @@ async function sembrar() {
   await Usuario.deleteMany({});
   console.log("🧹 Colecciones 'reportes' y 'usuarios' vaciadas");
 
-  const [ciudadano, autoridad] = await Usuario.create([
-    { nombre: "Olfan Beltrán", email: "olfan@ejemplo.com", rol: "ciudadano" },
-    { nombre: "Autoridad Local", email: "autoridad@villavo.gov.co", rol: "autoridad" },
+  const passwordHash = await bcrypt.hash("demo1234", 10);
+  const [usuario1, usuario2] = await Usuario.create([
+    { nombre: "Ana Ciudadana", email: "ana@ejemplo.com", rol: "ciudadano", passwordHash },
+    { nombre: "Carlos Vecino", email: "carlos@ejemplo.com", rol: "ciudadano", passwordHash },
   ]);
-  console.log("👥 2 usuarios creados");
+  console.log("👥 2 usuarios creados (contraseña de demo: demo1234)");
 
   // Reportes de ejemplo en Villavicencio. Coordenadas GeoJSON: [longitud, latitud].
   await Reporte.create([
@@ -30,7 +32,7 @@ async function sembrar() {
       gravedad: "alta",
       estado: "nuevo",
       ubicacion: { type: "Point", coordinates: [-73.6266, 4.142] },
-      reportadoPor: ciudadano._id,
+      reportadoPor: usuario1._id,
     },
     {
       tipo: "hurto_celular",
@@ -38,7 +40,7 @@ async function sembrar() {
       gravedad: "media",
       estado: "en_revision",
       ubicacion: { type: "Point", coordinates: [-73.631, 4.1455] },
-      reportadoPor: ciudadano._id,
+      reportadoPor: usuario1._id,
     },
     {
       tipo: "vandalismo",
@@ -46,7 +48,7 @@ async function sembrar() {
       gravedad: "baja",
       estado: "resuelto",
       ubicacion: { type: "Point", coordinates: [-73.62, 4.139] },
-      reportadoPor: autoridad._id,
+      reportadoPor: usuario2._id,
     },
     {
       tipo: "riña",
@@ -61,7 +63,7 @@ async function sembrar() {
       gravedad: "media",
       estado: "nuevo",
       ubicacion: { type: "Point", coordinates: [-73.635, 4.138] },
-      reportadoPor: ciudadano._id,
+      reportadoPor: usuario1._id,
     },
   ]);
   console.log("📍 5 reportes creados en Villavicencio");
